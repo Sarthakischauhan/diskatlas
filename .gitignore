@@ -1,0 +1,5 @@
+/diskatlas
+/diskusage
+/.venv/
+/*.png
+.DS_Store
