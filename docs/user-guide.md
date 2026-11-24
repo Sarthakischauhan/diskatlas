@@ -35,7 +35,7 @@ The selected line shows its name, size, percentage of scanned entries, type, and
 1. Press `↑` / `↓` or `k` / `j` to select an entry. Entries are ordered by size, largest first.
 2. With a folder selected, press `Enter` or `→` to scan it. The map shows that folder's immediate children when scanning finishes.
 3. Press `Backspace` or `←` to scan its parent. Navigation waits for the current scan to finish; use `Esc` first if you want to stop it.
-4. Press `r` after a scan to scan the current directory again. Completed scans are cached only for this app session, so revisiting a folder is faster but may show stale data until you refresh.
+4. Press `r` after a scan to clear session caches and scan the current directory again. Completed scans are cached only for this app session, so revisiting a folder is faster but may show stale data until you refresh.
 
 The map shows one directory level at a time, not nested folder contents simultaneously. If a file is selected, Enter does not open it.
 

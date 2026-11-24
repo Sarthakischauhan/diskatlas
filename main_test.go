@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -34,6 +35,54 @@ func TestScanAndSymlink(t *testing.T) {
 		}
 	}
 }
+func TestParallelScanHardLinks(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a", "b"} {
+		if err := os.Mkdir(filepath.Join(root, name), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	file := filepath.Join(root, "a", "file")
+	if err := os.WriteFile(file, make([]byte, 65536), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(file, filepath.Join(root, "b", "link")); err != nil {
+		t.Fatal(err)
+	}
+	first := scan(context.Background(), root)
+	if first.errors != 0 || len(first.items) != 2 {
+		t.Fatalf("scan: %+v", first)
+	}
+	for i := 0; i < 5; i++ {
+		next := scan(context.Background(), root)
+		for j := range first.items {
+			if next.items[j].name != first.items[j].name || next.items[j].size != first.items[j].size {
+				t.Fatalf("nondeterministic hardlink allocation: %+v vs %+v", first, next)
+			}
+		}
+	}
+	info, err := os.Lstat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	var total int64
+	for _, it := range first.items {
+		total += it.size
+	}
+	var dirs int64
+	for _, name := range []string{"a", "b"} {
+		info, err := os.Lstat(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		dirs += int64(info.Sys().(*syscall.Stat_t).Blocks) * 512
+	}
+	if total != dirs+int64(st.Blocks)*512 {
+		t.Fatalf("hardlink counted incorrectly: %d", total)
+	}
+}
+
 func TestCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

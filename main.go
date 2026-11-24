@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 
@@ -53,81 +51,6 @@ type model struct {
 	trashing                        bool
 }
 
-// Scan each direct child on one filesystem. lstat avoids traversing symlinks.
-// Hard links are counted once per scan, but APFS clones may still share blocks.
-func scan(ctx context.Context, root string) scanResult {
-	result := scanResult{path: root}
-	rootInfo, err := os.Lstat(root)
-	if err != nil {
-		result.errors++
-		return result
-	}
-	rootStat, ok := rootInfo.Sys().(*syscall.Stat_t)
-	if !ok {
-		result.errors++
-		return result
-	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		result.errors++
-		return result
-	}
-	seen := make(map[[2]uint64]bool)
-	for _, e := range entries {
-		if ctx.Err() != nil {
-			result.cancelled = true
-			break
-		}
-		p := filepath.Join(root, e.Name())
-		a := item{name: e.Name(), path: p, dir: e.IsDir()}
-		err = filepath.WalkDir(p, func(path string, d fs.DirEntry, walkErr error) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			if walkErr != nil {
-				a.errors++
-				return nil
-			}
-			info, err := d.Info()
-			if err != nil {
-				a.errors++
-				return nil
-			}
-			st, ok := info.Sys().(*syscall.Stat_t)
-			if !ok {
-				a.errors++
-				return nil
-			}
-			if uint64(st.Dev) != uint64(rootStat.Dev) {
-				if d.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			key := [2]uint64{uint64(st.Dev), uint64(st.Ino)}
-			if !seen[key] {
-				seen[key] = true
-				a.size += int64(st.Blocks) * 512
-			}
-			return nil
-		})
-		if err != nil && ctx.Err() == nil {
-			a.errors++
-		}
-		result.items = append(result.items, a)
-		result.errors += a.errors
-	}
-	if ctx.Err() != nil {
-		result.cancelled = true
-	}
-	sort.Slice(result.items, func(i, j int) bool {
-		if result.items[i].size == result.items[j].size {
-			return result.items[i].name < result.items[j].name
-		}
-		return result.items[i].size > result.items[j].size
-	})
-	return result
-}
 func start(path string) (*scanState, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &scanState{result: make(chan scanResult, 1), cancel: cancel}
@@ -269,7 +192,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "r":
 			if m.scan == nil {
-				delete(m.cache, m.path)
+				// A refresh can change hard-link attribution in related folders.
+				m.cache = make(map[string]scanResult)
 				m.status = "Scanning… Esc to cancel"
 				var cmd tea.Cmd
 				m.scan, cmd = start(m.path)
