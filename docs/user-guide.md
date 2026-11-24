@@ -26,7 +26,7 @@ The status line shows **Scanning** while the app walks the directory. The map ap
 
 ![Treemap view of example directories](images/treemap.png)
 
-Each rectangle represents one file or folder directly inside the directory shown at the top. Its area approximates its share of the scanned entries' allocated space: larger tiles generally mean more space. Colors and patterns help distinguish tiles; they don't classify files. The heavier border marks the selected entry.
+Each rectangle represents one file or folder directly inside the directory shown at the top. Its area approximates its share of the scanned entries' allocated space: larger tiles generally mean more space. Colors and patterns help distinguish tiles; they don't classify files. A gold background, heavier border, and `▶` marker identify the selected tile; the selected name is also shown above the map.
 
 The selected line shows its name, size, percentage of scanned entries, type, and position in the size-sorted list. The free-space number is for the filesystem; it is not the amount occupied by the current directory.
 

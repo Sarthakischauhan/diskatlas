@@ -12,7 +12,7 @@ Disk Atlas is a macOS disk-usage browser built in Go with [Bubble Tea](https://g
 
 - **Treemap and list views** — compare direct children by allocated size; switch views without rescanning.
 - **Drill down** — open a folder to scan its contents, or return to its parent.
-- **Visual selection** — color and patterns distinguish tiles; a heavy border marks the selected item.
+- **Visual selection** — color and patterns distinguish tiles; gold highlighting, a heavy border, and a `▶` marker identify the selected item.
 - **Faster scans and cached navigation** — up to four top-level entries are scanned concurrently, and completed scans are reused during the current session; press `r` for fresh results.
 - **Trash with confirmation** — move a selected folder to macOS Trash after explicitly confirming. Nothing is removed automatically.
 - **Visible limitations** — inaccessible entries and cancelled scans are reported as incomplete.

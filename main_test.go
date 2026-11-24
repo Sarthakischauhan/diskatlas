@@ -97,6 +97,9 @@ func TestMapAndSelection(t *testing.T) {
 	if !strings.Contains(s, "alpha") || !strings.Contains(s, "beta") {
 		t.Fatal("missing labels")
 	}
+	if !strings.Contains(s, "▶ alpha") || !strings.Contains(s, "┏") {
+		t.Fatal("selected tile needs a visible marker and heavy border")
+	}
 	m := model{items: items, path: "/tmp", width: 80, height: 24}
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if next.(model).selected != 1 {

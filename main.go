@@ -81,7 +81,7 @@ func moveToTrash(target trashTarget) tea.Cmd {
 			err = fmt.Errorf("folder changed since confirmation; rescan and try again")
 		}
 		if err == nil {
-			cmd := exec.Command("/usr/bin/osascript", "-e", "on run argv", "-e", "tell application \"Finder\" to delete (POSIX file (item 1 of argv))", "-e", "end run", target.path)
+			cmd := exec.Command("/usr/bin/osascript", "-e", "on run argv", "-e", "set targetFile to (POSIX file (item 1 of argv)) as alias", "-e", "tell application \"Finder\" to delete targetFile", "-e", "end run", target.path)
 			var out []byte
 			out, err = cmd.CombinedOutput()
 			if err != nil && len(out) > 0 {
@@ -330,6 +330,9 @@ func drawMap(items []item, sel, w, h int) string {
 				if items[a].dir {
 					name += "/"
 				}
+				if a == sel {
+					name = "▶ " + name
+				}
 				writeCells(grid, y+1, x+1, bw-2, runewidth.Truncate(name, bw-2, "…"))
 				if bh >= 4 {
 					writeCells(grid, y+2, x+1, bw-2, " "+human(items[a].size)+" ")
@@ -409,7 +412,7 @@ func drawMap(items []item, sel, w, h int) string {
 			if c.bg >= 0 {
 				style = style.Background(lipgloss.Color(palette[c.bg])).Foreground(lipgloss.Color("#FFFFFF"))
 				if c.selected {
-					style = style.Bold(true)
+					style = style.Background(lipgloss.Color("#F5D479")).Foreground(lipgloss.Color("#1A1424")).Bold(true)
 				}
 			}
 			out.WriteString(style.Render(s.String()))
