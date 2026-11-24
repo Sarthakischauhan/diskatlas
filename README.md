@@ -2,7 +2,7 @@
 
 **Explore disk usage as a colorful, patterned treemap—without leaving your terminal.**
 
-Disk Atlas is a read-only macOS disk-usage browser built in Go with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Gloss](https://github.com/charmbracelet/lipgloss). Scan a directory, see which entries occupy the most allocated space, and drill down to investigate.
+Disk Atlas is a macOS disk-usage browser built in Go with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Gloss](https://github.com/charmbracelet/lipgloss). Scan a directory, see which entries occupy the most allocated space, and drill down to investigate.
 
 ![Disk Atlas treemap showing patterned, size-proportional tiles](docs/images/treemap.png)
 
@@ -13,8 +13,8 @@ Disk Atlas is a read-only macOS disk-usage browser built in Go with [Bubble Tea]
 - **Treemap and list views** — compare direct children by allocated size; switch views without rescanning.
 - **Drill down** — open a folder to scan its contents, or return to its parent.
 - **Visual selection** — color and patterns distinguish tiles; a heavy border marks the selected item.
-- **Responsive scan controls** — scans run in the background; cancel with `Esc` or refresh with `r`.
-- **Read-only by design** — Disk Atlas has no delete or cleanup command.
+- **Cached navigation** — completed scans are reused during the current session; press `r` for fresh results.
+- **Trash with confirmation** — move a selected folder to macOS Trash after explicitly confirming. Nothing is removed automatically.
 - **Visible limitations** — inaccessible entries and cancelled scans are reported as incomplete.
 
 ## Requirements
@@ -64,9 +64,16 @@ The map appears when the scan completes. Large directories can take time. Each t
 | `Backspace` / `←` | Scan the parent directory |
 | `Tab` | Toggle treemap and list |
 | `g` / `Home`, `G` / `End` | Select the first or last entry |
-| `r` | Rescan the current directory |
+| `r` | Discard the current cached scan and rescan |
+| `d` | Ask to move the selected folder to Trash; confirm with `y` or cancel with `n` / `Esc` |
 | `Esc` | Cancel the current scan and show partial results |
 | `q` / `Ctrl-C` | Quit |
+
+### Cache and Trash
+
+Successful scans are cached **in memory for this app session only**. Revisiting a directory reuses its cached result, which can be stale if files changed outside Disk Atlas. Press `r` to force a new scan. Cancelled or incomplete scans are not cached. After a successful Trash operation, all session caches are discarded and the current directory is rescanned.
+
+Select a folder and press `d`; check the displayed path and press `y` to move it and its contents to the macOS Trash, or `n` / `Esc` to cancel. Disk Atlas asks Finder to perform the move, so macOS may ask for Automation permission. The app does not permanently delete items; restore them using Finder's Trash. Finder can refuse a move because of permissions, volume limitations, or other errors. Files and symlinks cannot be trashed using this shortcut.
 
 ## Understanding the numbers
 

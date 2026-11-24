@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -27,6 +28,15 @@ type scanResult struct {
 	errors    int
 	cancelled bool
 }
+type trashTarget struct {
+	path     string
+	identity os.FileInfo
+}
+type trashResult struct {
+	path string
+	err  error
+}
+
 type scanState struct {
 	result chan scanResult
 	cancel context.CancelFunc
@@ -38,6 +48,9 @@ type model struct {
 	scan                            *scanState
 	status                          string
 	showList                        bool
+	cache                           map[string]scanResult
+	confirm                         *trashTarget
+	trashing                        bool
 }
 
 // Scan each direct child on one filesystem. lstat avoids traversing symlinks.
@@ -122,6 +135,39 @@ func start(path string) (*scanState, tea.Cmd) {
 	return s, wait(s)
 }
 func wait(s *scanState) tea.Cmd { return func() tea.Msg { return <-s.result } }
+
+func (m *model) visit(path string) tea.Cmd {
+	m.path, m.items, m.selected = path, nil, 0
+	if result, ok := m.cache[path]; ok {
+		m.items, m.errors = result.items, result.errors
+		m.status = "Cached scan · press r to refresh"
+		return nil
+	}
+	m.status = "Scanning… Esc to cancel"
+	var cmd tea.Cmd
+	m.scan, cmd = start(path)
+	return cmd
+}
+
+// Finder puts the folder in Trash, not permanent deletion. Never interpolate
+// paths into AppleScript; they are passed as argv and rechecked immediately.
+func moveToTrash(target trashTarget) tea.Cmd {
+	return func() tea.Msg {
+		info, err := os.Lstat(target.path)
+		if err == nil && (!info.IsDir() || !os.SameFile(target.identity, info)) {
+			err = fmt.Errorf("folder changed since confirmation; rescan and try again")
+		}
+		if err == nil {
+			cmd := exec.Command("/usr/bin/osascript", "-e", "on run argv", "-e", "tell application \"Finder\" to delete (POSIX file (item 1 of argv))", "-e", "end run", target.path)
+			var out []byte
+			out, err = cmd.CombinedOutput()
+			if err != nil && len(out) > 0 {
+				err = fmt.Errorf("%s", strings.TrimSpace(string(out)))
+			}
+		}
+		return trashResult{path: target.path, err: err}
+	}
+}
 func (m model) Init() tea.Cmd {
 	if m.scan != nil {
 		return wait(m.scan)
@@ -145,9 +191,42 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status = fmt.Sprintf("%d entries inaccessible; sizes incomplete", v.errors)
 			} else {
 				m.status = "Scan complete"
+				if m.cache == nil {
+					m.cache = make(map[string]scanResult)
+				}
+				m.cache[v.path] = v
 			}
 		}
+	case trashResult:
+		m.trashing = false
+		if v.err != nil {
+			m.status = "Trash failed: " + safe(v.err.Error())
+			break
+		}
+		// A folder removal changes its ancestors and may affect hard-link accounting.
+		m.cache = make(map[string]scanResult)
+		m.status = "Moved to Trash; rescanning…"
+		var cmd tea.Cmd
+		m.scan, cmd = start(m.path)
+		return m, cmd
 	case tea.KeyMsg:
+		if m.confirm != nil {
+			switch v.String() {
+			case "y":
+				target := *m.confirm
+				m.confirm = nil
+				m.trashing = true
+				m.status = "Moving folder to Trash…"
+				return m, moveToTrash(target)
+			case "n", "esc":
+				m.confirm = nil
+				m.status = "Trash cancelled"
+			}
+			return m, nil
+		}
+		if m.trashing {
+			return m, nil
+		}
 		switch v.String() {
 		case "q", "ctrl+c":
 			if m.scan != nil {
@@ -174,8 +253,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "tab":
 			m.showList = !m.showList
+		case "d":
+			if m.scan == nil && len(m.items) > 0 {
+				it := m.items[m.selected]
+				if !it.dir || filepath.Dir(it.path) != m.path {
+					m.status = "Select a direct child folder to move to Trash"
+					break
+				}
+				info, err := os.Lstat(it.path)
+				if err != nil || !info.IsDir() {
+					m.status = "Folder unavailable or changed; press r to rescan"
+					break
+				}
+				m.confirm = &trashTarget{path: it.path, identity: info}
+			}
 		case "r":
 			if m.scan == nil {
+				delete(m.cache, m.path)
 				m.status = "Scanning… Esc to cancel"
 				var cmd tea.Cmd
 				m.scan, cmd = start(m.path)
@@ -183,24 +277,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter", "right":
 			if m.scan == nil && len(m.items) > 0 && m.items[m.selected].dir {
-				m.path = m.items[m.selected].path
-				m.items = nil
-				m.selected = 0
-				m.status = "Scanning… Esc to cancel"
-				var cmd tea.Cmd
-				m.scan, cmd = start(m.path)
+				cmd := m.visit(m.items[m.selected].path)
 				return m, cmd
 			}
 		case "backspace", "left":
 			if m.scan == nil {
 				parent := filepath.Dir(m.path)
 				if parent != m.path {
-					m.path = parent
-					m.items = nil
-					m.selected = 0
-					m.status = "Scanning… Esc to cancel"
-					var cmd tea.Cmd
-					m.scan, cmd = start(m.path)
+					cmd := m.visit(parent)
 					return m, cmd
 				}
 			}
@@ -219,7 +303,7 @@ func human(n int64) string {
 	return fmt.Sprintf("%.1f %s", v, u[i])
 }
 
-var palette = []string{"#573B98", "#176A82", "#28745E", "#94485F", "#92602D", "#445A9B", "#784282", "#2C7075"}
+var palette = []string{"#573B98", "#176A82", "#28745E", "#94485F", "#92602D", "#445A9B", "#784282", "#2C7075", "#845037", "#3E718F", "#68569B", "#667A33", "#8A4356", "#356A62", "#805C31", "#594C85"}
 
 type cell struct {
 	bg       int
@@ -257,7 +341,7 @@ func drawMap(items []item, sel, w, h int) string {
 					c := cell{bg: a % len(palette), selected: a == sel}
 					// Fill the tile with its motif; borders and labels are overlaid below.
 					if yy > y && yy < y+bh-1 && xx > x && xx < x+bw-1 {
-						switch a % 4 {
+						switch a % 8 {
 						case 0:
 							if (xx-x)/2%2 == (yy-y)%2 {
 								c.text = "░"
@@ -273,6 +357,22 @@ func drawMap(items []item, sel, w, h int) string {
 						case 3:
 							if (xx-x)%6 == 0 && (yy-y)%2 == 0 {
 								c.text = "┼"
+							}
+						case 4:
+							if (xx-x+yy-y)%6 == 0 {
+								c.text = "╲"
+							}
+						case 5:
+							if (yy-y)%3 == 0 && (xx-x)%4 < 2 {
+								c.text = "─"
+							}
+						case 6:
+							if (xx-x)%5 == 0 && (yy-y)%3 == 0 {
+								c.text = "◇"
+							}
+						case 7:
+							if (xx-x+2*(yy-y))%6 == 0 {
+								c.text = "✦"
 							}
 						}
 					}
@@ -493,7 +593,11 @@ func (m model) View() string {
 	} else {
 		body = drawMap(m.items, m.selected, w, height)
 	}
-	footer := clip(" ↑↓ select   ↵ open   ← parent   tab list/map   r refresh   q quit", w)
+	footer := clip(" ↑↓ select   ↵ open   ← parent   tab view   d trash   r refresh   q quit", w)
+	if m.confirm != nil {
+		detail = "  MOVE TO TRASH? " + safe(m.confirm.path)
+		footer = clip(" This folder and its contents will move to Trash.  y confirm   n / Esc cancel", w)
+	}
 	return header + "\n" + accent.Render(clip(detail, w)) + "\n" + muted.Render(" "+strings.Repeat("─", w-1)) + "\n" + body + "\n" + muted.Render(footer)
 }
 func main() {

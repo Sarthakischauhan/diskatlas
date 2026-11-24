@@ -1,6 +1,6 @@
 # Disk Atlas user guide
 
-Disk Atlas helps you find large folders and files on your Mac. It is **read-only**: browsing and rescanning do not delete or change your files.
+Disk Atlas helps you find large folders and files on your Mac. Browsing and rescanning do not delete files; you can explicitly move a selected folder to Trash after confirmation.
 
 ## 1. Start a scan
 
@@ -35,7 +35,7 @@ The selected line shows its name, size, percentage of scanned entries, type, and
 1. Press `↑` / `↓` or `k` / `j` to select an entry. Entries are ordered by size, largest first.
 2. With a folder selected, press `Enter` or `→` to scan it. The map shows that folder's immediate children when scanning finishes.
 3. Press `Backspace` or `←` to scan its parent. Navigation waits for the current scan to finish; use `Esc` first if you want to stop it.
-4. Press `r` after a scan to scan the current directory again.
+4. Press `r` after a scan to scan the current directory again. Completed scans are cached only for this app session, so revisiting a folder is faster but may show stale data until you refresh.
 
 The map shows one directory level at a time, not nested folder contents simultaneously. If a file is selected, Enter does not open it.
 
@@ -47,7 +47,9 @@ Press `Tab` to switch between the treemap and the size-sorted list. The list is 
 
 ## 5. Investigate safely
 
-Disk Atlas cannot delete files. Once you've identified a candidate, exit with `q` and review it in Finder or your preferred tools before removing it. Application data, backups, and developer dependencies may be needed or recreated; don't delete a folder solely because it is large.
+Review a candidate before removing it: application data, backups, and developer dependencies may be needed or recreated. To move a selected folder and everything inside it to the macOS Trash, press `d`, check the displayed path, then press `y` to confirm. Press `n` or `Esc` to cancel. Finder may ask for Automation permission or refuse the move. You can restore an item from Finder's Trash. Individual files and symlinks cannot be trashed from Disk Atlas.
+
+After a successful move, cached scans are cleared and the current directory is rescanned. Nothing is permanently deleted by this action, but other software or the user can later empty the Trash.
 
 To look at the macOS data volume, you can run:
 

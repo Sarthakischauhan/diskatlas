@@ -58,6 +58,59 @@ func TestMapAndSelection(t *testing.T) {
 		t.Fatal("list did not toggle")
 	}
 }
+func TestCacheNavigationAndRefresh(t *testing.T) {
+	root := t.TempDir()
+	child := filepath.Join(root, "child")
+	if err := os.Mkdir(child, 0700); err != nil {
+		t.Fatal(err)
+	}
+	m := model{path: child, cache: map[string]scanResult{root: {path: root, items: []item{{name: "cached", size: 42}}}}}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	got := next.(model)
+	if cmd != nil || got.scan != nil || len(got.items) != 1 || !strings.Contains(got.status, "Cached") {
+		t.Fatalf("cache not used: %+v", got)
+	}
+	next, cmd = got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	got = next.(model)
+	if cmd == nil || got.scan == nil {
+		t.Fatal("refresh must start new scan")
+	}
+	got.scan.cancel()
+	cmd()
+}
+
+func TestTrashConfirmationAndChangedFolder(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "folder")
+	if err := os.Mkdir(folder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	m := model{path: root, items: []item{{name: "folder", path: folder, dir: true}}, width: 100, height: 24}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	got := next.(model)
+	if got.confirm == nil || cmd != nil || !strings.Contains(got.View(), "MOVE TO TRASH") {
+		t.Fatal("missing confirmation")
+	}
+	next, cmd = got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if next.(model).confirm != nil || cmd != nil {
+		t.Fatal("cancel failed")
+	}
+	old := got.confirm.identity
+	if err := os.Rename(folder, folder+"-old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(folder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	result := moveToTrash(trashTarget{path: folder, identity: old})().(trashResult)
+	if result.err == nil {
+		t.Fatal("changed folder must not be trashed")
+	}
+	if _, err := os.Stat(folder); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSafeControlCharacters(t *testing.T) {
 	if strings.ContainsRune(safe("a\x1bb"), '\x1b') {
 		t.Fatal("terminal escape not sanitized")
