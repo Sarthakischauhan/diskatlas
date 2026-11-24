@@ -34,6 +34,10 @@ type trashResult struct {
 	path string
 	err  error
 }
+type pendingTrash struct {
+	item  item
+	index int
+}
 
 type scanState struct {
 	result chan scanResult
@@ -49,6 +53,7 @@ type model struct {
 	cache                           map[string]scanResult
 	confirm                         *trashTarget
 	trashing                        bool
+	pending                         *pendingTrash
 }
 
 func start(path string) (*scanState, tea.Cmd) {
@@ -121,11 +126,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case trashResult:
-		m.trashing = false
-		if v.err != nil {
-			m.status = "Trash failed: " + safe(v.err.Error())
+		if !m.trashing || m.pending == nil || v.path != m.pending.item.path {
 			break
 		}
+		m.trashing = false
+		if v.err != nil {
+			// Restore the original tile on failure; never pretend the move succeeded.
+			idx := m.pending.index
+			m.items = append(m.items, item{})
+			copy(m.items[idx+1:], m.items[idx:])
+			m.items[idx] = m.pending.item
+			m.selected = idx
+			m.pending = nil
+			m.status = "Trash failed; tile restored: " + safe(v.err.Error())
+			break
+		}
+		m.pending = nil
 		// A folder removal changes its ancestors and may affect hard-link accounting.
 		m.cache = make(map[string]scanResult)
 		m.status = "Moved to Trash; rescanning…"
@@ -139,7 +155,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				target := *m.confirm
 				m.confirm = nil
 				m.trashing = true
-				m.status = "Moving folder to Trash…"
+				m.pending = &pendingTrash{item: m.items[m.selected], index: m.selected}
+				// Copy before removing: cached scan slices may share this backing array.
+				remaining := make([]item, 0, len(m.items)-1)
+				remaining = append(remaining, m.items[:m.selected]...)
+				remaining = append(remaining, m.items[m.selected+1:]...)
+				m.items = remaining
+				if m.selected >= len(m.items) && m.selected > 0 {
+					m.selected--
+				}
+				m.status = "Moving to Trash… tile hidden pending confirmation"
 				return m, moveToTrash(target)
 			case "n", "esc":
 				m.confirm = nil

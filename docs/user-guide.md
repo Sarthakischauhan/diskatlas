@@ -49,7 +49,7 @@ Press `Tab` to switch between the treemap and the size-sorted list. The list is 
 
 Review a candidate before removing it: application data, backups, and developer dependencies may be needed or recreated. To move a selected folder and everything inside it to the macOS Trash, press `d`, check the displayed path, then press `y` to confirm. Press `n` or `Esc` to cancel. Finder may ask for Automation permission or refuse the move. You can restore an item from Finder's Trash. Individual files and symlinks cannot be trashed from Disk Atlas.
 
-After a successful move, cached scans are cleared and the current directory is rescanned. Nothing is permanently deleted by this action, but other software or the user can later empty the Trash.
+After confirmation, the tile disappears immediately while Finder processes the move. The status identifies it as pending; if the move fails, the tile is restored and an error appears. After a successful move, cached scans are cleared and the current directory is rescanned. Nothing is permanently deleted by this action, but other software or the user can later empty the Trash.
 
 To look at the macOS data volume, you can run:
 

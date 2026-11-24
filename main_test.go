@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -161,6 +162,52 @@ func TestTrashConfirmationAndChangedFolder(t *testing.T) {
 	if _, err := os.Stat(folder); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestOptimisticTrashRestoresOnFailure(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "folder")
+	if err := os.Mkdir(folder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	original := []item{{name: "first", path: filepath.Join(root, "first")}, {name: "folder", path: folder, dir: true}, {name: "last", path: filepath.Join(root, "last")}}
+	m := model{path: root, items: original, selected: 1, cache: map[string]scanResult{root: {path: root, items: original}}}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	next, cmd := next.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	pending := next.(model)
+	if cmd == nil || !pending.trashing || len(pending.items) != 2 || pending.items[1].name != "last" || !strings.Contains(pending.status, "pending") {
+		t.Fatalf("not hidden immediately: %+v", pending)
+	}
+	if pending.cache[root].items[1].name != "folder" {
+		t.Fatal("optimistic update changed cached slice")
+	}
+	next, _ = pending.Update(trashResult{path: folder, err: fmt.Errorf("permission denied")})
+	restored := next.(model)
+	if restored.trashing || restored.pending != nil || len(restored.items) != 3 || restored.items[1].name != "folder" || restored.selected != 1 || !strings.Contains(restored.status, "failed") {
+		t.Fatalf("not restored: %+v", restored)
+	}
+}
+
+func TestOptimisticTrashSuccessStartsRescan(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "folder")
+	if err := os.Mkdir(folder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	m := model{path: root, items: []item{{name: "folder", path: folder, dir: true}}}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	pending := next.(model)
+	if len(pending.items) != 0 || pending.selected != 0 {
+		t.Fatal("last tile must be hidden safely")
+	}
+	next, cmd := pending.Update(trashResult{path: folder})
+	after := next.(model)
+	if after.pending != nil || after.trashing || after.scan == nil || cmd == nil {
+		t.Fatal("success must clear pending and rescan")
+	}
+	after.scan.cancel()
+	cmd()
 }
 
 func TestSafeControlCharacters(t *testing.T) {

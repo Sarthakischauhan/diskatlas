@@ -73,7 +73,7 @@ The map appears when the scan completes. Large directories can take time. Each t
 
 Successful scans are cached **in memory for this app session only**. Revisiting a directory reuses its cached result, which can be stale if files changed outside Disk Atlas. Press `r` to discard all session caches and force a new scan. Cancelled or incomplete scans are not cached. After a successful Trash operation, all session caches are discarded and the current directory is rescanned. Independent direct children are scanned concurrently (up to four workers); a directory dominated by one child may see little speedup.
 
-Select a folder and press `d`; check the displayed path and press `y` to move it and its contents to the macOS Trash, or `n` / `Esc` to cancel. Disk Atlas asks Finder to perform the move, so macOS may ask for Automation permission. The app does not permanently delete items; restore them using Finder's Trash. Finder can refuse a move because of permissions, volume limitations, or other errors. Files and symlinks cannot be trashed using this shortcut.
+Select a folder and press `d`; check the displayed path and press `y` to move it and its contents to the macOS Trash, or `n` / `Esc` to cancel. The tile disappears immediately while the move is pending and is restored if it fails. Disk Atlas asks Finder to perform the move, so macOS may ask for Automation permission. The app does not permanently delete items; restore them using Finder's Trash. Finder can refuse a move because of permissions, volume limitations, or other errors. Files and symlinks cannot be trashed using this shortcut.
 
 ## Understanding the numbers
 
