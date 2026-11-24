@@ -43,6 +43,8 @@ If `~/.local/bin` is not on your `PATH`, add it in your shell configuration. Alt
 
 ## Usage
 
+New to Disk Atlas? Follow the [step-by-step user guide](docs/user-guide.md) for a walkthrough and troubleshooting.
+
 ```sh
 diskatlas                       # scan your home directory
 diskatlas ~/Downloads           # scan a specific directory
